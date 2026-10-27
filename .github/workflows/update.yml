@@ -1,40 +1,25 @@
-import json
-from datetime import datetime, timezone
-import yfinance as yf
+name: update-sector-data
+on:
+  schedule:
+    - cron: "30 22 * * 1-5"   # 한국시간 화~토 오전 7:30 (미국 장 마감 후)
+  workflow_dispatch:          # 수동 실행 버튼
 
-SECTORS = {
-    "XLK": "기술", "XLE": "에너지", "XLF": "금융", "XLV": "헬스케어",
-    "XLI": "산업재", "XLY": "경기소비재", "XLP": "필수소비재",
-    "XLU": "유틸리티", "XLB": "소재", "XLRE": "부동산", "XLC": "통신",
-}
-PERIODS = {"1M": 21, "3M": 63}
+permissions:
+  contents: write
 
-tickers = list(SECTORS) + ["SPY"]
-data = yf.download(tickers, period="6mo", auto_adjust=True, progress=False)["Close"]
-
-def ret(series, days):
-    s = series.dropna()
-    return (s.iloc[-1] / s.iloc[-1 - days] - 1) * 100
-
-spy = {p: ret(data["SPY"], d) for p, d in PERIODS.items()}
-
-rows = []
-for t, name in SECTORS.items():
-    row = {"ticker": t, "name": name}
-    for p, d in PERIODS.items():
-        r = ret(data[t], d)
-        row[p + "_abs"] = round(r, 2)      # 섹터 자체 수익률(%)
-        row[p] = round(r - spy[p], 2)      # SPY 대비 상대 성과(%p)
-    rows.append(row)
-
-rows.sort(key=lambda r: r["1M"], reverse=True)
-
-out = {
-    "updated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-    "asof": str(data.index[-1].date()),
-    "spy": {p: round(v, 2) for p, v in spy.items()},
-    "sectors": rows,
-}
-with open("data.json", "w", encoding="utf-8") as f:
-    json.dump(out, f, ensure_ascii=False, indent=2)
-print(json.dumps(out, ensure_ascii=False, indent=2))
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install yfinance
+      - run: python update.py
+      - run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add data.json
+          git diff --staged --quiet || git commit -m "update sector data"
+          git push
