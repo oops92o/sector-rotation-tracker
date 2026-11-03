@@ -10,7 +10,7 @@ SECTORS = {
 PERIODS = {"1M": 21, "3M": 63}
 
 tickers = list(SECTORS) + ["SPY"]
-data = yf.download(tickers, period="6mo", auto_adjust=True, progress=False)["Close"]
+data = yf.download(tickers, period="6mo", auto_adjust=True, progress=False, threads=False)["Close"]
 
 def ret(series, days):
     s = series.dropna()
